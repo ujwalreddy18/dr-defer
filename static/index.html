@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DR-Defer · Retinopathy grading that knows when to defer</title>
+<meta name="description" content="Diabetic retinopathy grading from retinal fundus images, with a deferral layer that hands uncertain cases to a specialist. For research use only.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script>document.documentElement.classList.add('js')</script>
+<style>
+:root{
+  --bg:#06141a; --bg2:#0a1f27; --surface:#0d2a34; --surface2:#123642;
+  --line:rgba(160,220,235,.14); --line2:rgba(160,220,235,.26);
+  --text:#e8f6f9; --muted:#93b4bd; --faint:#6f929c;
+  --cyan:#22d3ee; --green:#34d399; --amber:#fbbf24; --red:#f87171;
+  --on-accent:#04222a;
+  --radius:16px; --ease:cubic-bezier(.22,.8,.24,1);
+  --font:'Figtree',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:84px}
+body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.6;font-size:16px;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+   radial-gradient(900px 600px at 85% -10%,rgba(34,211,238,.13),transparent 60%),
+   radial-gradient(700px 500px at -10% 30%,rgba(52,211,153,.08),transparent 60%),
+   linear-gradient(var(--line) 1px,transparent 1px) 0 0/56px 56px,
+   linear-gradient(90deg,var(--line) 1px,transparent 1px) 0 0/56px 56px;
+  -webkit-mask-image:radial-gradient(ellipse at 50% 20%,#000 20%,transparent 75%);
+  mask-image:radial-gradient(ellipse at 50% 20%,#000 20%,transparent 75%);opacity:.5}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--cyan);outline-offset:3px;border-radius:8px}
+.wrap{width:min(1160px,100% - 32px);margin-inline:auto}
+section{padding:96px 0}
+h1,h2,h3{line-height:1.12;letter-spacing:-.02em;font-weight:800}
+h2{font-size:clamp(1.9rem,4vw,2.9rem)}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:.78rem;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--cyan);margin-bottom:14px}
+.eyebrow::before{content:"";width:22px;height:2px;background:var(--cyan);border-radius:2px}
+.lead{color:var(--muted);font-size:1.12rem;max-width:62ch}
+svg{display:block}
+.icon{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* ---------- nav ---------- */
+.nav{position:sticky;top:0;z-index:50;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  background:rgba(6,20,26,.72);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;justify-content:space-between;height:68px;gap:16px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1.15rem;text-decoration:none;letter-spacing:-.01em}
+.brand svg{width:30px;height:30px}
+.nav ul{display:flex;gap:6px;list-style:none}
+.nav ul a{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:10px;
+  color:var(--muted);text-decoration:none;font-weight:600;font-size:.95rem;transition:color .2s,background .2s}
+.nav ul a:hover{color:var(--text);background:rgba(160,220,235,.08)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:48px;padding:0 24px;
+  border-radius:12px;border:1px solid transparent;font:inherit;font-weight:700;font-size:1rem;cursor:pointer;
+  text-decoration:none;transition:transform .2s var(--ease),box-shadow .25s,background .2s,border-color .2s}
+.btn-primary{background:linear-gradient(135deg,var(--cyan),var(--green));color:var(--on-accent);
+  box-shadow:0 8px 30px -8px rgba(34,211,238,.55)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 14px 36px -8px rgba(34,211,238,.7)}
+.btn-ghost{background:rgba(160,220,235,.06);border-color:var(--line2);color:var(--text)}
+.btn-ghost:hover{background:rgba(160,220,235,.12);border-color:var(--cyan)}
+.btn:active{transform:translateY(0) scale(.98)}
+.nav .btn{min-height:44px;padding:0 18px;font-size:.92rem}
+
+/* ---------- hero ---------- */
+.hero{padding:72px 0 56px}
+.hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
+.pill{display:inline-flex;align-items:center;gap:10px;padding:7px 14px 7px 10px;border-radius:999px;
+  background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.3);font-size:.85rem;font-weight:600;color:#a5f3fc;margin-bottom:22px}
+.pill i{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(52,211,153,.7);animation:ping 2.2s infinite}
+.hero h1{font-size:clamp(2.2rem,4.5vw,3.6rem);margin-bottom:22px}
+[hidden]{display:none!important}
+.grad{background:linear-gradient(100deg,var(--cyan),var(--green) 60%,#bef264);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero .lead{margin-bottom:34px}
+.cta-row{display:flex;flex-wrap:wrap;gap:14px}
+.hero-note{margin-top:26px;font-size:.88rem;color:var(--faint);display:flex;gap:10px;align-items:flex-start;max-width:56ch}
+
+.visual{position:relative;aspect-ratio:1;max-width:520px;margin-inline:auto;width:100%}
+.visual svg.retina{width:100%;height:100%;filter:drop-shadow(0 30px 60px rgba(34,211,238,.18))}
+.ring-rot{transform-origin:240px 240px;animation:spin 40s linear infinite}
+.ring-rot2{transform-origin:240px 240px;animation:spin 60s linear infinite reverse}
+.scan{animation:scan 4.8s var(--ease) infinite alternate}
+.vessel{stroke-dasharray:1;stroke-dashoffset:1;animation:draw 2.2s var(--ease) forwards}
+.vessel.d2{animation-delay:.25s}.vessel.d3{animation-delay:.5s}.vessel.d4{animation-delay:.75s}.vessel.d5{animation-delay:1s}
+.lesion{transform-box:fill-box;transform-origin:center;animation:pulse 2.6s ease-out infinite}
+.lesion.l2{animation-delay:.9s}.lesion.l3{animation-delay:1.7s}
+.chip{position:absolute;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;
+  background:rgba(10,31,39,.86);border:1px solid var(--line2);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  font-weight:700;font-size:.9rem;box-shadow:0 18px 40px -12px rgba(0,0,0,.6);animation:float 6s ease-in-out infinite}
+.chip small{display:block;font-weight:500;color:var(--muted);font-size:.74rem}
+.chip .dot{width:10px;height:10px;border-radius:50%}
+.chip.c1{left:-2%;top:14%}
+.chip.c2{right:-3%;bottom:16%;animation-delay:-3s}
+.vis-cap{position:absolute;left:0;right:0;bottom:-6px;text-align:center;font-size:.75rem;color:var(--faint)}
+
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes scan{from{transform:translateY(-215px)}to{transform:translateY(215px)}}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes pulse{0%{transform:scale(.6);opacity:.95}80%,100%{transform:scale(2.4);opacity:0}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(52,211,153,.6)}70%,100%{box-shadow:0 0 0 12px rgba(52,211,153,0)}}
+
+/* ---------- stats ---------- */
+.stats{padding:0 0 24px}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line);border:1px solid var(--line);
+  border-radius:var(--radius);overflow:hidden}
+.stat{background:linear-gradient(180deg,var(--bg2),var(--bg));padding:28px 24px}
+.stat b{display:block;font-size:clamp(1.9rem,3.4vw,2.7rem);font-weight:800;letter-spacing:-.03em;
+  background:linear-gradient(120deg,#fff,#a5f3fc);-webkit-background-clip:text;background-clip:text;color:transparent;
+  font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:.92rem}
+
+/* ---------- how it works ---------- */
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-top:48px;position:relative}
+.steps::before{content:"";position:absolute;left:8%;right:8%;top:34px;height:2px;
+  background:linear-gradient(90deg,var(--cyan),var(--green),var(--amber));opacity:.35;
+  transform-origin:left;transform:scaleX(0);transition:transform 1.4s var(--ease)}
+.steps.in::before{transform:scaleX(1)}
+.step{position:relative;padding:22px;border-radius:var(--radius);background:linear-gradient(180deg,var(--surface),var(--bg2));
+  border:1px solid var(--line);transition:transform .3s var(--ease),border-color .3s}
+.step:hover{transform:translateY(-6px);border-color:var(--cyan)}
+.step .num{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;margin-bottom:18px;
+  background:rgba(34,211,238,.12);border:1px solid rgba(34,211,238,.35);color:var(--cyan)}
+.step .num .icon{width:24px;height:24px}
+.step h3{font-size:1.1rem;margin-bottom:8px;letter-spacing:-.01em}
+.step p{color:var(--muted);font-size:.95rem}
+.step.defer .num{background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.4);color:var(--amber)}
+
+/* ---------- demo ---------- */
+.demo{background:linear-gradient(180deg,transparent,rgba(13,42,52,.55) 20%,rgba(13,42,52,.55) 80%,transparent)}
+.demo-head{margin-bottom:40px}
+.panel{border-radius:22px;background:linear-gradient(180deg,var(--surface),var(--bg2));border:1px solid var(--line2);
+  box-shadow:0 40px 80px -40px rgba(0,0,0,.7);overflow:hidden}
+.demo-grid{display:grid;grid-template-columns:1fr 1fr;min-height:520px}
+.demo-grid>div{padding:32px}
+.demo-left{border-right:1px solid var(--line)}
+.drop{position:relative;display:grid;place-items:center;text-align:center;width:100%;aspect-ratio:1;max-height:440px;
+  border:2px dashed var(--line2);border-radius:18px;background:rgba(6,20,26,.5);cursor:pointer;color:inherit;font:inherit;
+  transition:border-color .25s,background .25s,transform .25s var(--ease);overflow:hidden}
+.drop:hover,.drop.over{border-color:var(--cyan);background:rgba(34,211,238,.07)}
+.drop.over{transform:scale(1.015)}
+.drop-inner{padding:24px;display:grid;gap:12px;justify-items:center}
+.drop-inner .up{width:60px;height:60px;border-radius:18px;display:grid;place-items:center;
+  background:rgba(34,211,238,.12);border:1px solid rgba(34,211,238,.35);color:var(--cyan);animation:float 4s ease-in-out infinite}
+.drop-inner .up .icon{width:28px;height:28px}
+.drop strong{font-size:1.15rem}
+.drop small{color:var(--muted)}
+.preview{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;display:none}
+.drop.has .preview{display:block}.drop.has .drop-inner{display:none}
+.beam{position:absolute;left:0;right:0;height:90px;top:-90px;display:none;pointer-events:none;
+  background:linear-gradient(180deg,transparent,rgba(34,211,238,.35),transparent);border-bottom:2px solid var(--cyan);
+  box-shadow:0 8px 30px rgba(34,211,238,.5)}
+.drop.busy .beam{display:block;animation:beam 1.6s linear infinite}
+@keyframes beam{to{top:100%}}
+.demo-actions{display:flex;gap:12px;margin-top:18px;flex-wrap:wrap}
+.privacy{margin-top:16px;font-size:.84rem;color:var(--faint);display:flex;gap:10px;align-items:flex-start}
+.privacy .icon{width:18px;height:18px;margin-top:2px}
+
+.result-empty{height:100%;min-height:360px;display:grid;place-items:center;text-align:center;color:var(--muted);padding:20px}
+.result-empty .ghost{width:96px;height:96px;margin:0 auto 18px;opacity:.5}
+.result{display:none;animation:rise .6s var(--ease)}
+.result.show{display:block}
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.verdict{display:flex;gap:20px;align-items:center;padding:18px;border-radius:16px;border:1px solid var(--line2);background:rgba(6,20,26,.55)}
+.verdict.ok{border-color:rgba(52,211,153,.5);background:linear-gradient(135deg,rgba(52,211,153,.14),rgba(6,20,26,.55))}
+.verdict.defer{border-color:rgba(251,191,36,.55);background:linear-gradient(135deg,rgba(251,191,36,.14),rgba(6,20,26,.55))}
+.gauge{position:relative;width:124px;height:124px;flex:none}
+.gauge svg{width:100%;height:100%;transform:rotate(-90deg)}
+.gauge .track{stroke:rgba(160,220,235,.15)}
+.gauge .fill{transition:stroke-dashoffset 1.2s var(--ease),stroke .3s}
+.gauge .val{position:absolute;inset:0;display:grid;place-items:center;text-align:center;font-weight:800;font-size:1.5rem;line-height:1}
+.gauge .val small{display:block;font-size:.58rem;font-weight:600;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;margin-top:4px}
+.verdict h3{font-size:1.35rem;margin-bottom:6px;letter-spacing:-.01em}
+.verdict p{color:var(--muted);font-size:.94rem}
+.tag{display:inline-flex;align-items:center;gap:8px;font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px}
+.verdict.ok .tag{color:var(--green)}.verdict.defer .tag{color:var(--amber)}
+.alert{display:none;gap:12px;align-items:flex-start;margin-top:14px;padding:12px 14px;border-radius:12px;
+  background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.4);color:#fecaca;font-size:.9rem}
+.alert.show{display:flex}
+.alert .icon{color:var(--red);margin-top:2px}
+.bars{margin-top:22px;display:grid;gap:10px}
+.bars h4{font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.bar{display:grid;grid-template-columns:136px 1fr 48px;gap:12px;align-items:center;font-size:.92rem}
+.bar .name{color:var(--muted);font-weight:600}
+.bar .track{height:10px;border-radius:99px;background:rgba(160,220,235,.1);overflow:hidden}
+.bar .fillb{height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,var(--cyan),var(--green));transition:width 1s var(--ease)}
+.bar.top .name{color:var(--text)}
+.bar .pct{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+.views{margin-top:22px}
+.tabs{display:inline-flex;padding:4px;border-radius:12px;background:rgba(6,20,26,.7);border:1px solid var(--line);gap:4px;margin-bottom:12px}
+.tab{min-height:40px;padding:0 16px;border-radius:9px;border:0;background:transparent;color:var(--muted);font:inherit;font-weight:700;font-size:.9rem;cursor:pointer;transition:background .2s,color .2s}
+.tab[aria-selected=true]{background:var(--surface2);color:var(--text)}
+.tab:disabled{opacity:.4;cursor:not-allowed}
+.viewbox{border-radius:14px;overflow:hidden;background:#000;border:1px solid var(--line);aspect-ratio:1;max-width:320px}
+.viewbox img{width:100%;height:100%;object-fit:contain;animation:fade .5s}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.cam-note{font-size:.82rem;color:var(--faint);margin-top:8px;max-width:320px}
+.disclaimer{margin-top:20px;padding-top:16px;border-top:1px solid var(--line);font-size:.82rem;color:var(--faint)}
+
+/* ---------- evidence ---------- */
+.evidence-grid{display:grid;grid-template-columns:1.25fr .75fr;gap:24px;margin-top:44px;align-items:start}
+.card{padding:28px;border-radius:var(--radius);background:linear-gradient(180deg,var(--surface),var(--bg2));border:1px solid var(--line)}
+.card h3{font-size:1.1rem;margin-bottom:6px;letter-spacing:-.01em}
+.card .sub{color:var(--muted);font-size:.9rem;margin-bottom:16px}
+.chart{width:100%;height:auto}
+.chart text{font-family:var(--font);fill:var(--muted);font-size:12px}
+.chart .gl{stroke:var(--line);stroke-width:1}
+.chart .ln{fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset 1.8s var(--ease)}
+.chart.in .ln{stroke-dashoffset:0}
+.chart .pt{opacity:0;transition:opacity .4s 1.4s}.chart.in .pt{opacity:1}
+.finding{display:grid;gap:18px}
+.finding div{padding-left:16px;border-left:3px solid var(--cyan)}
+.finding div.warn{border-color:var(--amber)}
+.finding b{display:block;font-size:1.02rem;margin-bottom:2px}
+.finding span{color:var(--muted);font-size:.92rem}
+.table-wrap{overflow-x:auto;margin-top:24px}
+table{width:100%;border-collapse:collapse;font-size:.92rem;min-width:520px}
+th,td{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+th{color:var(--muted);font-size:.78rem;letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+td:first-child{font-weight:700}
+
+/* ---------- limits ---------- */
+.limits{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px;margin-top:44px}
+.limit{padding:24px;border-radius:var(--radius);border:1px solid var(--line);background:rgba(13,42,52,.5);transition:border-color .3s,transform .3s var(--ease)}
+.limit:hover{border-color:var(--amber);transform:translateY(-4px)}
+.limit .icon{color:var(--amber);width:26px;height:26px;margin-bottom:14px}
+.limit h3{font-size:1.05rem;margin-bottom:8px;letter-spacing:-.01em}
+.limit p{color:var(--muted);font-size:.94rem}
+
+footer{border-top:1px solid var(--line);padding:44px 0;color:var(--muted);font-size:.92rem}
+footer .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:24px}
+footer b{color:var(--text)}
+
+/* ---------- reveal ---------- */
+.js .reveal{opacity:0;transform:translateY(24px);transition:opacity .8s var(--ease),transform .8s var(--ease)}
+.js .reveal.in{opacity:1;transform:none}
+.js .reveal.d1{transition-delay:.1s}.js .reveal.d2{transition-delay:.2s}.js .reveal.d3{transition-delay:.3s}
+
+/* ---------- responsive ---------- */
+@media (max-width:960px){
+  section{padding:72px 0}
+  .hero .wrap{grid-template-columns:1fr}
+  .visual{max-width:420px;order:-1}
+  .stat-grid{grid-template-columns:repeat(2,1fr)}
+  .steps{grid-template-columns:repeat(2,1fr)}.steps::before{display:none}
+  .demo-grid{grid-template-columns:1fr}.demo-left{border-right:0;border-bottom:1px solid var(--line)}
+  .evidence-grid,.limits{grid-template-columns:1fr}
+  .nav ul{display:none}
+}
+@media (max-width:520px){
+  .steps{grid-template-columns:1fr}
+  .demo-grid>div{padding:20px}
+  .verdict{flex-direction:column;text-align:center}
+  .bar{grid-template-columns:118px 1fr 40px;font-size:.86rem}
+  .chip.c1{left:0}.chip.c2{right:0}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+  .js .reveal{opacity:1;transform:none}
+  .vessel{stroke-dashoffset:0}
+  .chart .ln{stroke-dashoffset:0}.chart .pt{opacity:1}
+  .steps::before{transform:scaleX(1)}
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5 5 5M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4m6-4v4M9 18v4m6-4v4M2 9h4m-4 6h4m12-6h4m-4 6h4"/></symbol>
+    <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3v18M5 7h14M5 7l-3 8a4 4 0 0 0 6 0L5 7Zm14 0-3 8a4 4 0 0 0 6 0l-3-8Z"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4m0 3.5v.01"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8.5v.01"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4m4 4H7"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></symbol>
+  </defs>
+</svg>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="DR-Defer home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#34d399"/></linearGradient></defs>
+        <circle cx="16" cy="16" r="13" fill="none" stroke="url(#lg)" stroke-width="2.4"/><circle cx="16" cy="16" r="5.5" fill="url(#lg)"/><path d="M16 3v6M16 23v6M3 16h6M23 16h6" stroke="url(#lg)" stroke-width="2" stroke-linecap="round"/></svg>
+      DR-Defer
+    </a>
+    <nav aria-label="Primary">
+      <ul>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#try">Try it</a></li>
+        <li><a href="#evidence">Evidence</a></li>
+        <li><a href="#limits">Limits</a></li>
+      </ul>
+    </nav>
+    <a class="btn btn-primary" href="#try">Analyse an image</a>
+  </div>
+</header>
+
+<main id="top">
+<!-- ================= HERO ================= -->
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <div class="pill"><i></i> For research use only · Not a medical device</div>
+      <h1>Grade retinopathy. <span class="grad">Know when not to trust the grade.</span></h1>
+      <p class="lead">DR-Defer stages diabetic retinopathy from a retinal photograph and measures its own confidence. When it is unsure, it does not guess. It defers the case to a human specialist.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#try"><svg class="icon"><use href="#i-upload"/></svg>Analyse a retinal image</a>
+        <a class="btn btn-ghost" href="#how">See how it decides</a>
+      </div>
+      <p class="hero-note"><svg class="icon" style="margin-top:3px"><use href="#i-info"/></svg>
+        It grades the severity of eye damage in patients who already have diabetes. It does not detect diabetes, and it is not a medical device.</p>
+    </div>
+
+    <div class="visual" aria-hidden="true">
+      <svg class="retina" viewBox="0 0 480 480">
+        <defs>
+          <radialGradient id="rg" cx="46%" cy="48%" r="60%">
+            <stop offset="0" stop-color="#d9693a"/><stop offset=".55" stop-color="#a23d1f"/><stop offset="1" stop-color="#4a1409"/>
+          </radialGradient>
+          <radialGradient id="disc" cx="50%" cy="50%" r="50%">
+            <stop offset="0" stop-color="#fff3b0"/><stop offset=".6" stop-color="#f7c35b"/><stop offset="1" stop-color="#d9893a" stop-opacity="0"/>
+          </radialGradient>
+          <radialGradient id="mac" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#5a1608"/><stop offset="1" stop-color="#5a1608" stop-opacity="0"/></radialGradient>
+          <linearGradient id="beam" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#22d3ee" stop-opacity="0"/><stop offset=".85" stop-color="#22d3ee" stop-opacity=".35"/><stop offset="1" stop-color="#67e8f9" stop-opacity=".95"/>
+          </linearGradient>
+          <clipPath id="cl"><circle cx="240" cy="240" r="200"/></clipPath>
+        </defs>
+        <circle class="ring-rot" cx="240" cy="240" r="226" fill="none" stroke="#22d3ee" stroke-opacity=".5" stroke-width="1.5" stroke-dasharray="3 14" stroke-linecap="round"/>
+        <circle class="ring-rot2" cx="240" cy="240" r="214" fill="none" stroke="#34d399" stroke-opacity=".35" stroke-width="1.5" stroke-dasharray="40 22"/>
+        <circle cx="240" cy="240" r="200" fill="url(#rg)"/>
+        <g clip-path="url(#cl)">
+          <ellipse cx="228" cy="252" rx="48" ry="44" fill="url(#mac)"/>
+          <g fill="none" stroke="#7d1d12" stroke-linecap="round" stroke-width="5" opacity=".85">
+            <path class="vessel" pathLength="1" d="M335 232C300 168 235 138 150 110"/>
+            <path class="vessel d2" pathLength="1" d="M335 232C284 206 205 212 110 182"/>
+            <path class="vessel d3" pathLength="1" d="M335 232C296 262 232 292 140 338"/>
+            <path class="vessel d4" pathLength="1" d="M335 232C312 304 278 352 214 410"/>
+            <path class="vessel d5" pathLength="1" d="M335 232C346 164 334 112 296 62"/>
+          </g>
+          <g fill="none" stroke="#7d1d12" stroke-linecap="round" stroke-width="2.6" opacity=".7">
+            <path class="vessel d3" pathLength="1" d="M262 168C246 190 238 206 200 214"/>
+            <path class="vessel d4" pathLength="1" d="M248 290C238 306 214 318 176 316"/>
+            <path class="vessel d5" pathLength="1" d="M214 150C196 158 176 154 160 142"/>
+          </g>
+          <circle cx="338" cy="232" r="40" fill="url(#disc)"/>
+          <g class="scan"><rect x="30" y="20" width="420" height="190" fill="url(#beam)" opacity=".8"/></g>
+        </g>
+        <g fill="none" stroke="#22d3ee" stroke-width="2">
+          <circle class="lesion" cx="186" cy="204" r="8"/>
+          <circle class="lesion l2" cx="272" cy="318" r="8"/>
+          <circle class="lesion l3" cx="164" cy="296" r="8"/>
+        </g>
+        <g fill="#67e8f9"><circle cx="186" cy="204" r="3.5"/><circle cx="272" cy="318" r="3.5"/><circle cx="164" cy="296" r="3.5"/></g>
+      </svg>
+      <div class="chip c1"><span class="dot" style="background:var(--green)"></span><div>Stage 2 · Moderate<small>Confidence 87%</small></div></div>
+      <div class="chip c2"><span class="dot" style="background:var(--amber)"></span><div>Low confidence<small>Deferred to specialist</small></div></div>
+      <div class="vis-cap">Illustration</div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= STATS ================= -->
+<section class="stats" style="padding-top:8px">
+  <div class="wrap">
+    <div class="stat-grid reveal">
+      <div class="stat"><b data-count="15316" data-dec="0">15,316</b><span>EyePACS images, split by patient into train, validation and test</span></div>
+      <div class="stat"><b data-count="0.815" data-dec="3">0.815</b><span>Agreement score (QWK) on the cases it grades itself (80.5% of them), up from 0.749 grading everything</span></div>
+      <div class="stat"><b data-count="6.0" data-dec="1" data-suffix=" pts">6.0 pts</b><span>Accuracy gained on the cases it grades itself, 66.6% to 72.6%</span></div>
+      <div class="stat"><b data-count="3662" data-dec="0">3,662</b><span>APTOS images from a different clinic, used as an external check</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= HOW ================= -->
+<section id="how">
+  <div class="wrap">
+    <div class="reveal"><div class="eyebrow">How it works</div>
+      <h2>Four steps. One honest decision.</h2>
+      <p class="lead" style="margin-top:16px">Most classifiers always answer. DR-Defer adds a gate: if the calibrated confidence falls below a threshold, the case goes to a person.</p></div>
+    <div class="steps reveal d1" id="steps">
+      <div class="step"><div class="num"><svg class="icon"><use href="#i-eye"/></svg></div>
+        <h3>1. Prepare the image</h3><p>Crops the black border, pads to a square and resizes, matching how the model was trained.</p></div>
+      <div class="step"><div class="num"><svg class="icon"><use href="#i-chip"/></svg></div>
+        <h3>2. Grade the stage</h3><p>Three EfficientNet-B0 networks, trained at 512 px, each score the five stages from No DR to Proliferative. Their answers are averaged.</p></div>
+      <div class="step"><div class="num"><svg class="icon"><use href="#i-scale"/></svg></div>
+        <h3>3. Check its confidence</h3><p>Temperature scaling makes the probabilities honest. Below 50% confidence, it will not answer.</p></div>
+      <div class="step defer"><div class="num"><svg class="icon"><use href="#i-user"/></svg></div>
+        <h3>4. Grade or defer</h3><p>Confident cases are graded with a Grad-CAM heatmap. Uncertain cases go to a specialist.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= DEMO ================= -->
+<section id="try" class="demo">
+  <div class="wrap">
+    <div class="demo-head reveal"><div class="eyebrow">Analyse an image</div>
+      <h2>Upload a retinal fundus photo.</h2>
+      <p class="lead" style="margin-top:16px">Try a clear image, then a blurry one, then a photo that is not an eye. Please do not upload images of real patients or anything identifiable.</p></div>
+
+    <div class="panel reveal d1">
+      <div class="demo-grid">
+        <div class="demo-left">
+          <input id="file" type="file" accept="image/*" hidden>
+          <button class="drop" id="drop" type="button" aria-label="Choose or drop a retinal image">
+            <img class="preview" id="preview" alt="Your uploaded retinal image">
+            <div class="beam"></div>
+            <div class="drop-inner">
+              <span class="up"><svg class="icon"><use href="#i-upload"/></svg></span>
+              <strong>Drop an image here</strong>
+              <small>or click to browse · PNG or JPG, up to 20 MB</small>
+            </div>
+          </button>
+          <div class="demo-actions">
+            <button class="btn btn-ghost" id="reset" type="button" hidden>Try another image</button>
+          </div>
+          <p class="privacy"><svg class="icon"><use href="#i-lock"/></svg>Images are processed in memory and are never saved or shared. Use sample or public images only.</p>
+        </div>
+
+        <div>
+          <div class="result-empty" id="empty">
+            <div>
+              <svg class="ghost" viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="2"><circle cx="48" cy="48" r="38"/><circle cx="62" cy="46" r="8"/><path d="M62 46C52 34 38 28 22 24M62 46C50 42 34 44 18 38M62 46C52 56 38 62 24 70"/></svg>
+              <p>Your result will appear here.</p>
+            </div>
+          </div>
+          <div class="result" id="result" aria-live="polite">
+            <div class="verdict" id="verdict">
+              <div class="gauge" aria-hidden="true">
+                <svg viewBox="0 0 120 120">
+                  <circle class="track" cx="60" cy="60" r="50" fill="none" stroke-width="10"/>
+                  <circle class="fill" id="gfill" cx="60" cy="60" r="50" fill="none" stroke-width="10" stroke-linecap="round" stroke-dasharray="314.16" stroke-dashoffset="314.16"/>
+                  <line id="gtick" x1="60" y1="2" x2="60" y2="18" stroke="#fff" stroke-width="3" stroke-linecap="round" style="transform-origin:60px 60px"/>
+                </svg>
+                <div class="val"><div><span id="gval">0</span><small>confidence</small></div></div>
+              </div>
+              <div>
+                <div class="tag" id="vtag"></div>
+                <h3 id="vtitle"></h3>
+                <p id="vsub"></p>
+                <p id="vthr" style="margin-top:8px;font-size:.8rem;color:var(--faint)"></p>
+              </div>
+            </div>
+            <div class="alert" id="alert" role="alert"><svg class="icon"><use href="#i-alert"/></svg>
+              <span>This does not look like a standard fundus photograph. The model grades any image it is given, so this result is unreliable.</span></div>
+            <div class="bars" id="bars"><h4>Probability by stage</h4></div>
+            <div class="views">
+              <div class="tabs" role="tablist" aria-label="Image view">
+                <button class="tab" role="tab" id="tab-img" aria-selected="true" type="button">Retina</button>
+                <button class="tab" role="tab" id="tab-cam" aria-selected="false" type="button">Grad-CAM</button>
+              </div>
+              <div class="viewbox"><img id="viewimg" alt="Processed retinal image"></div>
+              <p class="cam-note" id="camnote"></p>
+            </div>
+            <p class="disclaimer">For research use only. Not a medical device and not for clinical use.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= EVIDENCE ================= -->
+<section id="evidence">
+  <div class="wrap">
+    <div class="reveal"><div class="eyebrow">Evidence</div>
+      <h2>Deferring the hard cases makes the rest more reliable.</h2>
+      <p class="lead" style="margin-top:16px">Results for the 3-model ensemble on 2,166 held-out EyePACS test images, with APTOS as an external check. Patients never appear in both training and test.</p></div>
+
+    <div class="evidence-grid">
+      <div class="card reveal d1">
+        <h3>Quality of automatic grades as coverage drops</h3>
+        <p class="sub">Coverage is the share of cases the system grades itself. The rest go to a specialist.</p>
+        <svg class="chart" id="chart" viewBox="0 0 600 330" role="img"
+          aria-label="Line chart. As coverage falls from 100% to 50%, accuracy rises from 67% to 80% and quadratic weighted kappa rises from 0.75 to 0.89.">
+          <g id="grid"></g>
+          <path class="ln" id="l-acc" pathLength="1" stroke="#22d3ee"/>
+          <path class="ln" id="l-qwk" pathLength="1" stroke="#34d399"/>
+          <g id="pts"></g>
+        </svg>
+      </div>
+      <div class="card reveal d2">
+        <h3>What we found</h3>
+        <p class="sub">Including the parts that did not work.</p>
+        <div class="finding">
+          <div><b>Higher resolution helped</b><span>Training at 512 px instead of 384 px raised accuracy from 59.3% to 64.4% (mean of three runs) and QWK from 0.677 to 0.728.</span></div>
+          <div><b>Deferral works</b><span>At 80.5% coverage, accuracy on the cases it grades itself rises from 66.6% to 72.6%, and QWK from 0.749 to 0.815.</span></div>
+          <div class="warn"><b>The threshold does not transfer</b><span>On APTOS the same threshold auto-graded 92% of cases, not 80%, and calibration error rose from 0.033 to 0.091. It must be recalibrated for each new clinic.</span></div>
+          <div class="warn"><b>Fancier scores did not help</b><span>Disagreement between the three models was a worse deferral signal than plain confidence: 2.8 accuracy points lower at 80% coverage (95% interval 1.4 to 4.2).</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card reveal" style="margin-top:24px">
+      <h3>Internal test versus external check</h3>
+      <p class="sub">3-model ensemble, one deferral threshold (confidence 0.50) chosen on EyePACS validation and applied unchanged to both.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Dataset</th><th>Images</th><th>Accuracy</th><th>QWK</th><th>Macro-F1</th><th>Calibration error</th><th>Auto-graded</th><th>QWK (auto-graded)</th></tr></thead>
+          <tbody>
+            <tr><td>EyePACS test</td><td>2,166</td><td>66.6%</td><td>0.749</td><td>0.595</td><td>0.033</td><td>80.5%</td><td>0.815</td></tr>
+            <tr><td>APTOS (external)</td><td>3,662</td><td>64.2%</td><td>0.863</td><td>0.447</td><td>0.091</td><td>92.3%</td><td>0.879</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="sub" style="margin:18px 0 0">QWK depends on how many cases of each stage a dataset has, so APTOS's higher QWK does not mean the model is better there. Its lower macro-F1 shows the rarer stages are still hard. APTOS intervals resample images, because it has no patient IDs.</p>
+      <h3 style="margin-top:28px">Referable disease (stage 2 or higher)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Dataset</th><th>AUC</th><th>Sensitivity</th><th>Specificity</th></tr></thead>
+          <tbody>
+            <tr><td>EyePACS test</td><td>0.925</td><td>78.0%</td><td>90.2%</td></tr>
+            <tr><td>APTOS (external)</td><td>0.963</td><td>99.7%</td><td>81.9%</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= LIMITS ================= -->
+<section id="limits">
+  <div class="wrap">
+    <div class="reveal"><div class="eyebrow">Limits</div>
+      <h2>What this system cannot do.</h2>
+      <p class="lead" style="margin-top:16px">Knowing the limits is part of the result.</p></div>
+    <div class="limits">
+      <div class="limit reveal d1"><svg class="icon"><use href="#i-alert"/></svg><h3>It does not detect diabetes</h3>
+        <p>It grades retinopathy severity in patients who already have diabetes. A "No DR" result does not mean a person is free of diabetes.</p></div>
+      <div class="limit reveal d2"><svg class="icon"><use href="#i-layers"/></svg><h3>Mild and severe cases are the weak spot</h3>
+        <p>Stage 1 is graded correctly only about a third of the time (F1 0.35), and stage 3 is also weak (F1 0.50). Deferral reduces, but does not remove, this.</p></div>
+      <div class="limit reveal d3"><svg class="icon"><use href="#i-swap"/></svg><h3>It answers for any image</h3>
+        <p>A photo that is not a retina still gets a grade. A colour check warns about obvious cases, but confidence alone cannot catch them.</p></div>
+      <div class="limit reveal d3"><svg class="icon"><use href="#i-scale"/></svg><h3>Not accurate enough to screen</h3>
+        <p>It finds 78% of referable cases on EyePACS, below what a screening programme needs. It is for research use only, not a clinical tool.</p></div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div><b>DR-Defer</b><br>Diabetic retinopathy grading with deferral to a specialist.<br>Capstone project · SR University, Warangal</div>
+    <div>Team 219: D. Nithish · K. Ujwal Reddy · J. Sreeja · G. Varshitha Reddy<br>Guide: Mr. Radhakrishnan P<br>Trained on the Kaggle EyePACS dataset and checked on APTOS 2019. For research use only. Not a medical device.</div>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- scroll reveal ---------- */
+  const io = new IntersectionObserver(es => es.forEach(e => {
+    if (!e.isIntersecting) return;
+    e.target.classList.add('in'); io.unobserve(e.target);
+    if (e.target.matches('.stat-grid')) countUp();
+  }), {threshold: .15});
+  document.querySelectorAll('.reveal,#steps,#chart').forEach(el => io.observe(el));
+
+  /* ---------- count-up ---------- */
+  function countUp() {
+    document.querySelectorAll('[data-count]').forEach(el => {
+      const end = parseFloat(el.dataset.count), dec = +el.dataset.dec, suf = el.dataset.suffix || '';
+      const fmt = v => v.toLocaleString('en-US', {minimumFractionDigits: dec, maximumFractionDigits: dec}) + suf;
+      if (reduce) { el.textContent = fmt(end); return; }
+      const t0 = performance.now(), dur = 1400;
+      const tick = t => {
+        const p = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+        el.textContent = fmt(end * e);
+        if (p < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+  }
+
+  /* ---------- evidence chart (real test-set numbers) ---------- */
+  const cov = [1.0, .9, .8, .7, .6, .5];
+  const acc = [.666, .701, .728, .753, .772, .801];
+  const qwk = [.749, .787, .820, .844, .863, .885];
+  const W = 600, H = 330, L = 52, R = 70, Tp = 18, B = 52;
+  const X = c => L + (1 - c) / .5 * (W - L - R);
+  const Y = v => Tp + (.90 - v) / (.90 - .65) * (H - Tp - B);
+  const ns = 'http://www.w3.org/2000/svg';
+  const mk = (n, a, txt) => { const e = document.createElementNS(ns, n); for (const k in a) e.setAttribute(k, a[k]); if (txt != null) e.textContent = txt; return e; };
+  const grid = $('#grid');
+  [.65, .70, .75, .80, .85, .90].forEach(v => {
+    grid.append(mk('line', {class: 'gl', x1: L, x2: W - R, y1: Y(v), y2: Y(v)}));
+    grid.append(mk('text', {x: L - 10, y: Y(v) + 4, 'text-anchor': 'end'}, v.toFixed(2)));
+  });
+  cov.forEach(c => grid.append(mk('text', {x: X(c), y: H - 28, 'text-anchor': 'middle'}, Math.round(c * 100) + '%')));
+  grid.append(mk('text', {x: (L + W - R) / 2, y: H - 6, 'text-anchor': 'middle'}, 'Coverage: share of cases graded automatically'));
+  const path = ys => ys.map((v, i) => (i ? 'L' : 'M') + X(cov[i]).toFixed(1) + ' ' + Y(v).toFixed(1)).join('');
+  $('#l-acc').setAttribute('d', path(acc)); $('#l-qwk').setAttribute('d', path(qwk));
+  const pts = $('#pts');
+  [[acc, '#22d3ee', 'Accuracy'], [qwk, '#34d399', 'QWK']].forEach(([arr, col, name]) => {
+    arr.forEach((v, i) => {
+      const c = mk('circle', {class: 'pt', cx: X(cov[i]), cy: Y(v), r: 4.5, fill: col, stroke: '#06141a', 'stroke-width': 2});
+      c.append(mk('title', {}, `${name} ${v} at ${Math.round(cov[i] * 100)}% coverage`)); pts.append(c);
+    });
+    pts.append(mk('text', {class: 'pt', x: X(.5) + 12, y: Y(arr[5]) + 4, style: `fill:${col};font-weight:700`}, name));
+  });
+
+  /* ---------- upload + analyse ---------- */
+  const drop = $('#drop'), file = $('#file'), preview = $('#preview');
+  const empty = $('#empty'), result = $('#result'), resetBtn = $('#reset');
+  let last = null, url = null;
+
+  drop.addEventListener('click', () => file.click());
+  file.addEventListener('change', () => file.files[0] && run(file.files[0]));
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) run(f); });
+  resetBtn.addEventListener('click', () => {
+    drop.classList.remove('has', 'busy'); preview.removeAttribute('src'); file.value = '';
+    result.classList.remove('show'); empty.style.display = ''; resetBtn.hidden = true;
+  });
+
+  async function run(f) {
+    if (!f.type.startsWith('image/')) return showError('Please choose an image file (PNG or JPG).');
+    if (url) URL.revokeObjectURL(url);
+    url = URL.createObjectURL(f); preview.src = url;
+    drop.classList.add('has', 'busy'); resetBtn.hidden = false;
+    result.classList.remove('show'); empty.style.display = 'none';
+    const fd = new FormData(); fd.append('file', f);
+    try {
+      const [res] = await Promise.all([fetch('/api/predict', {method: 'POST', body: fd}), new Promise(r => setTimeout(r, reduce ? 0 : 1300))]);
+      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.detail || 'The server could not analyse this image.'); }
+      render(await res.json());
+    } catch (err) {
+      showError(err.message === 'Failed to fetch' ? 'Could not reach the DR-Defer server. Is it still running?' : err.message);
+    } finally { drop.classList.remove('busy'); }
+  }
+
+  function showError(msg) {
+    empty.style.display = ''; empty.querySelector('p').textContent = msg;
+  }
+
+  function render(r) {
+    last = r; empty.style.display = 'none'; result.classList.add('show');
+    const pct = Math.round(r.confidence * 100), thr = Math.round(r.threshold * 100);
+    const v = $('#verdict'); v.className = 'verdict ' + (r.defer ? 'defer' : 'ok');
+    const second = [...r.probabilities.keys()].sort((a, b) => r.probabilities[b] - r.probabilities[a]);
+    $('#vtag').textContent = r.defer ? 'Deferred to a specialist' : 'Auto-graded';
+    if (r.defer) {
+      $('#vtitle').textContent = 'Not confident enough to grade';
+      const top2 = second.slice(0, 2), close = r.probabilities[top2[0]] - r.probabilities[top2[1]] < 0.03;
+      const lean = close ? `stage ${Math.min(...top2)} or ${Math.max(...top2)}` : `stage ${r.stage}, ${r.stage_name}`;
+      $('#vsub').textContent = `Confidence ${pct}% is below the ${thr}% threshold. A clinician should review this image. Leaning toward ${lean}.`;
+    } else {
+      $('#vtitle').textContent = `Stage ${r.stage} · ${r.stage_name}`;
+      $('#vsub').textContent = r.referable
+        ? 'Referable diabetic retinopathy (stage 2 or higher). Refer for specialist assessment.'
+        : 'No referable diabetic retinopathy detected by the model (stage 0 or 1).';
+    }
+    $('#vthr').textContent = `The white tick on the ring marks the ${thr}% deferral threshold.`;
+    $('#alert').classList.toggle('show', r.not_fundus);
+
+    const fill = $('#gfill'), C = 314.16;
+    fill.style.stroke = r.defer ? 'var(--amber)' : 'var(--green)';
+    fill.style.strokeDashoffset = C;
+    $('#gtick').style.transform = `rotate(${r.threshold * 360}deg)`;
+    requestAnimationFrame(() => requestAnimationFrame(() => fill.style.strokeDashoffset = C * (1 - r.confidence)));
+    const gv = $('#gval'); const t0 = performance.now();
+    (function tick(t) { const p = reduce ? 1 : Math.min(1, (t - t0) / 1100); gv.textContent = Math.round(pct * (1 - Math.pow(1 - p, 3))) + '%'; if (p < 1) requestAnimationFrame(tick); })(t0);
+
+    const bars = $('#bars'); bars.querySelectorAll('.bar').forEach(b => b.remove());
+    r.probabilities.forEach((p, i) => {
+      const row = document.createElement('div'); row.className = 'bar' + (i === r.stage ? ' top' : '');
+      row.innerHTML = '<span class="name"></span><div class="track"><div class="fillb"></div></div><span class="pct"></span>';
+      row.querySelector('.name').textContent = `${i} · ${r.stages[i]}`;
+      row.querySelector('.pct').textContent = Math.round(p * 100) + '%';
+      bars.append(row);
+      requestAnimationFrame(() => requestAnimationFrame(() => row.querySelector('.fillb').style.width = (p * 100) + '%'));
+    });
+
+    const camTab = $('#tab-cam'); camTab.disabled = !r.heatmap;
+    $('#camnote').textContent = r.heatmap ? 'Grad-CAM highlights the regions that most influenced the predicted stage.' : 'Stage 0 predicted, so there is no lesion heatmap to show.';
+    setView('img');
+    result.scrollIntoView({behavior: reduce ? 'auto' : 'smooth', block: 'nearest'});
+  }
+
+  function setView(which) {
+    if (!last) return;
+    const useCam = which === 'cam' && last.heatmap;
+    $('#viewimg').src = useCam ? last.heatmap : last.image;
+    $('#viewimg').alt = useCam ? 'Retinal image with Grad-CAM heatmap overlay' : 'Processed retinal image';
+    $('#tab-img').setAttribute('aria-selected', String(!useCam));
+    $('#tab-cam').setAttribute('aria-selected', String(!!useCam));
+  }
+  $('#tab-img').addEventListener('click', () => setView('img'));
+  $('#tab-cam').addEventListener('click', () => setView('cam'));
+})();
+</script>
+</body>
+</html>
